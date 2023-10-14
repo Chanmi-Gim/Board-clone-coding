@@ -2,6 +2,8 @@
 
 출처 : [따라하는 네스트 제이에스](https://www.inflearn.com/course/%EB%94%B0%EB%9D%BC%ED%95%98%EB%8A%94-%EB%84%A4%EC%8A%A4%ED%8A%B8-%EC%A0%9C%EC%9D%B4%EC%97%90%EC%8A%A4)
 
+
+  
 ## 기본요소
 
 - service를 controller에서 이용하기
@@ -14,9 +16,10 @@
   constructor(private boardsService: BoardsService) {} // 접근 제한자를 붙이면 위의 코드를 간단하게 한줄로 표현가능
   ```
 
+  
 ## CRUD
 
-### 배열 정의 및 배열 Read
+###  배열 정의 및 배열 Read
 
 - service에서 배열 정의 및 리턴값 불러오기
 
@@ -36,7 +39,7 @@
   }
   ```
 
-### Create
+###  Create
 
 #### 데이터 모델 정의
 
@@ -106,43 +109,43 @@
     // }
   }
   ```
+  
+  
+- DTO(Data Transfer Object) : 데이터 전송과 관련된 로직을 최소화하기 위해 사용한다. 테이블 내에는 여러가지 다양한 속성이 존재하는데 적은 수의 속성을 주고 받을 때는 위에서 사용한 것처럼 각각의 속성을 일일이 적어주는 것은 문제가 되지 않지만, 많은 수의 속성을 주고 받을 때 어떤 특정 속성을 변경하고 싶다면 여러 로직에서 이 속성에 대한 정보를 변경해야 하기에 매우 번거롭다. 따라서, 쉬운유지보수를 위해 DTO를 이용하여 속성을 관리한다.
 
-> DTO(Data Transfer Object)
+  - class, interface 둘다 사용가능 (class 권장)
+  - dto 폴더 생성
+  
+    - create-board.dto.ts 파일 생성
+  
+      ```typescript
+      export class CreateBoardDto {
+        title: string;
+        description: string;
+      }
+      ```
+  
+  - 데이터 전송과 관련된 부분 dto로 바꿔주기
+  
+    - service
+  
+      ```typescript
+          createBoard(createBoardDto: CreateBoardDto) {
+          const { title, description } = createBoardDto;
+          }
+      ```
+  
+    - controller
+  
+      ```typescript
+          @Post()
+          createBoard(@Body() createBoardDto: CreateBoardDto): Board {
+              return this.boardService.createBoard(createBoardDto);
+          }
+      ```
 
-데이터 전송과 관련된 로직을 최소화하기 위해 사용한다. 테이블 내에는 여러가지 다양한 속성이 존재하는데 적은 수의 속성을 주고 받을 때는 위에서 사용한 것처럼 각각의 속성을 일일이 적어주는 것은 문제가 되지 않지만, 많은 수의 속성을 주고 받을 때 어떤 특정 속성을 변경하고 싶다면 여러 로직에서 이 속성에 대한 정보를 변경해야 하기에 매우 번거롭다. 따라서, 쉬운유지보수를 위해 DTO를 이용하여 속성을 관리한다.
-
-- class, interface 둘다 사용가능 (class 권장)
-- dto 폴더 생성
-
-  - create-board.dto.ts 파일 생성
-
-    ```typescript
-    export class CreateBoardDto {
-      title: string;
-      description: string;
-    }
-    ```
-
-- 데이터 전송과 관련된 부분 dto로 바꿔주기
-
-  - service
-
-    ```typescript
-        createBoard(createBoardDto: CreateBoardDto) {
-        const { title, description } = createBoardDto;
-        }
-    ```
-
-  - controller
-
-    ```typescript
-        @Post()
-        createBoard(@Body() createBoardDto: CreateBoardDto): Board {
-            return this.boardService.createBoard(createBoardDto);
-        }
-    ```
-
-### Read
+  
+###  Read
 
 #### 특정 속성을 가진 데이터 읽기
 
@@ -168,7 +171,8 @@
       //@Param('id') id :string
   ```
 
-### Delete
+  
+###  Delete
 
 - service : 전달받은 ID와 일치하지 않은 데이터만 남기기
 
@@ -187,7 +191,8 @@
       }
   ```
 
-### Update
+  
+###  Update
 
 - 업데이트 기능 : 게시물의 상태(public or private)를 변경
 - service
