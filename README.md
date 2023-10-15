@@ -106,41 +106,38 @@
     // }
   }
   ```
+- DTO(Data Transfer Object) : 데이터 전송과 관련된 로직을 최소화하기 위해 사용한다. 테이블 내에는 여러가지 다양한 속성이 존재하는데 적은 수의 속성을 주고 받을 때는 위에서 사용한 것처럼 각각의 속성을 일일이 적어주는 것은 문제가 되지 않지만, 많은 수의 속성을 주고 받을 때 어떤 특정 속성을 변경하고 싶다면 여러 로직에서 이 속성에 대한 정보를 변경해야 하기에 매우 번거롭다. 따라서, 쉬운유지보수를 위해 DTO를 이용하여 속성을 관리한다.
 
-> DTO(Data Transfer Object)
+  - class, interface 둘다 사용가능 (class 권장)
+  - dto 폴더 생성
 
-데이터 전송과 관련된 로직을 최소화하기 위해 사용한다. 테이블 내에는 여러가지 다양한 속성이 존재하는데 적은 수의 속성을 주고 받을 때는 위에서 사용한 것처럼 각각의 속성을 일일이 적어주는 것은 문제가 되지 않지만, 많은 수의 속성을 주고 받을 때 어떤 특정 속성을 변경하고 싶다면 여러 로직에서 이 속성에 대한 정보를 변경해야 하기에 매우 번거롭다. 따라서, 쉬운유지보수를 위해 DTO를 이용하여 속성을 관리한다.
+    - create-board.dto.ts 파일 생성
 
-- class, interface 둘다 사용가능 (class 권장)
-- dto 폴더 생성
+      ```typescript
+      export class CreateBoardDto {
+        title: string;
+        description: string;
+      }
+      ```
 
-  - create-board.dto.ts 파일 생성
+  - 데이터 전송과 관련된 부분 dto로 바꿔주기
 
-    ```typescript
-    export class CreateBoardDto {
-      title: string;
-      description: string;
-    }
-    ```
+    - service
 
-- 데이터 전송과 관련된 부분 dto로 바꿔주기
+      ```typescript
+          createBoard(createBoardDto: CreateBoardDto) {
+          const { title, description } = createBoardDto;
+          }
+      ```
 
-  - service
+    - controller
 
-    ```typescript
-        createBoard(createBoardDto: CreateBoardDto) {
-        const { title, description } = createBoardDto;
-        }
-    ```
-
-  - controller
-
-    ```typescript
-        @Post()
-        createBoard(@Body() createBoardDto: CreateBoardDto): Board {
-            return this.boardService.createBoard(createBoardDto);
-        }
-    ```
+      ```typescript
+          @Post()
+          createBoard(@Body() createBoardDto: CreateBoardDto): Board {
+              return this.boardService.createBoard(createBoardDto);
+          }
+      ```
 
 ### Read
 
