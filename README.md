@@ -208,3 +208,118 @@
       return this.boardService.updateBoardStatus(id, status);
   }
   ```
+
+## Pipes
+
+- 기능 : data transformation, data validation 수행
+- 요청 데이터의 검증, 가공 또는 변환을 수행하여 컨트롤러 경로 처리기에 의해 처리되는 인수에 대해서 데이터를 조작하거나 검증하는데 사용함. 통과하면 컨트롤러의 핸들러가 작동하고 실패하면 에러 발생함
+
+  - data transformation : 입력 데이터를 원하는 형식으로 반환 [ex] 문자열 -> 정수
+  - data validation : 입력데이터를 평가하고 유효한 경우 변경되지 않은 상태로 전달. 그렇지 않으면 예외 발생 [ex] 이름길이가 10자 이하여야하는데 10자 이상이 되면 에러 발생
+
+- 사용방법 :
+
+  1. handler-level pipes : 핸들러 레벨의 파이프.
+
+  - @UsePipes() 데코레이터 이용. (모든 파라미터에 적용됨)
+
+  2. parameter-level pipes : 파라미터 레벨의 파이프.
+
+  - @Body('title', 파이프)
+
+  3. global-level pipes : 애플리케이션 레벨의 파이프. 클라이언트에서 들어오는 모든 요청에 적용됨.
+
+  - main.ts에 넣어준다.
+
+- built-in Pipe 종류
+
+  - ValidationPipe
+  - ParseIntPipe
+  - ParseBoolPipe
+  - ParseArrayPipe
+  - ParseUUIDPipe
+  - DefaultValuePipe
+
+- module install
+
+  ```bash
+  npm install class-validator class-transformer --save
+  ```
+
+- 실습 1. Post시 빈 문자열 보냈을 경우 에러 발생
+
+  1. dto에서 pipe 적용 (class-validator)
+
+     ```typescript
+     import { IsNotEmpty } from 'class-validator';
+     export class CreateBoardDto {
+       @IsNotEmpty()
+       title: string;
+
+       @IsNotEmpty()
+       description: string;
+     }
+     ```
+
+  2. handler 레벨 파이프 적용
+
+     ```typescript
+       @Post()
+       @UsePipes(ValidationPipe)
+       createBoard(@Body() createBoardDto: CreateBoardDto): Board {
+         return this.boardService.createBoard(createBoardDto);
+       }
+     ```
+
+  3. postman으로 빈 문자열을 보냈을 경우 에러발생
+
+- 실습 2. Get시 해당되는 데이터가 없을 경우 에러발생
+
+  - new NotFoundException() 이용 -> not found 에러 발생
+    ```typescript
+      getBoardById(id: string): Board {
+        const found = this.boards.find((board) => board.id === id);
+        if (!found) {
+          throw new NotFoundException(`Can't find Board with id ${id}`);
+        }
+        return found;
+      }
+    ```
+
+- Custom pipe 이용하는 방법
+
+  - pipe transform이란 인터페이스를 새롭게 만들 커스텀 파이프에 구현해야합니다.
+  - pipe transform 인터페이스는 모든 파이프에서 구현해줘야 하는 인터페이스.
+
+  1. 커스텀 파이프 구성 (boards -> pipes -> board-status-validation.pipe.ts)
+
+     ```typescript
+     import { BadRequestException, PipeTransform } from '@nestjs/common';
+     import { BoardStatus } from '../board.model';
+     export class BoardStatusValidationPipe implements PipeTransform {
+       readonly StatusOptions = [BoardStatus.PRIVATE, BoardStatus.PUBLIC];
+       transform(value: any) {
+         // transform(value: any, metadata: ArgumentMetadata) { // value: 처리가 된 인자의 값, metadata: 인자에 대한 메타 데이터를 포함한 객체
+
+         value = value.toUpperCase();
+         if (!this.isStatusValid(value)) {
+           throw new BadRequestException(`${value} isn't in the status option`);
+         }
+         return value;
+       }
+
+       private isStatusValid(status: any) {
+         const index = this.StatusOptions.indexOf(status);
+         return index !== -1;
+       }
+     }
+     ```
+
+  2. controller : 파라미터 레벨에서 pipe 적용
+
+     ```typescript
+       @Patch('/:id/status')
+       updateBoardStatus(@Param('id') id: string, @Body('status', BoardStatusValidationPipe)  status: BoardStatus,) {
+         return this.boardService.updateBoardStatus(id, status);
+       }
+     ```

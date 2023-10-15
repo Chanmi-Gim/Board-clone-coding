@@ -1,11 +1,18 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Board, BoardStatus } from './board.model';
 import { v1 as uuid } from 'uuid'; //v1 : 버전1 (여러가지 버전 존재)
 import { CreateBoardDto } from './dto/create-board.dto';
 
 @Injectable()
 export class BoardsService {
-  private boards: Board[] = [];
+  private boards: Board[] = [
+    {
+      id: 'cf2837b0-6b4c-11ee-8d95-2dbe28d0b2f4',
+      title: 'title1',
+      description: 'description 1',
+      status: BoardStatus.PUBLIC,
+    },
+  ];
 
   getAllBoards(): Board[] {
     return this.boards;
@@ -21,12 +28,19 @@ export class BoardsService {
     this.boards.push(board);
     return board;
   }
+
   getBoardById(id: string): Board {
-    return this.boards.find((board) => board.id === id);
+    const found = this.boards.find((board) => board.id === id);
+    if (!found) {
+      throw new NotFoundException(`Can't find Board with id ${id}`);
+    }
+    return found;
   }
+
   deleteBoard(id: string): void {
     this.boards = this.boards.filter((board) => board.id !== id);
   }
+
   updateBoardStatus(id: string, status: BoardStatus): Board {
     const board = this.getBoardById(id);
     board.status = status;

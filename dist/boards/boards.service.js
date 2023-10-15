@@ -12,7 +12,14 @@ const board_model_1 = require("./board.model");
 const uuid_1 = require("uuid");
 let BoardsService = class BoardsService {
     constructor() {
-        this.boards = [];
+        this.boards = [
+            {
+                id: 'cf2837b0-6b4c-11ee-8d95-2dbe28d0b2f4',
+                title: 'title1',
+                description: 'description 1',
+                status: board_model_1.BoardStatus.PUBLIC,
+            },
+        ];
     }
     getAllBoards() {
         return this.boards;
@@ -29,7 +36,11 @@ let BoardsService = class BoardsService {
         return board;
     }
     getBoardById(id) {
-        return this.boards.find((board) => board.id === id);
+        const found = this.boards.find((board) => board.id === id);
+        if (!found) {
+            throw new common_1.NotFoundException(`Can't find Board with id ${id}`);
+        }
+        return found;
     }
     deleteBoard(id) {
         this.boards = this.boards.filter((board) => board.id !== id);
