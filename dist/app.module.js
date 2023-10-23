@@ -9,12 +9,15 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
 const boards_module_1 = require("./boards/boards.module");
+const auth_module_1 = require("./auth/auth.module");
+const typeorm_config_1 = require("./configs/typeorm.config");
+const typeorm_1 = require("@nestjs/typeorm");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
 exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
-        imports: [boards_module_1.BoardsModule],
+        imports: [boards_module_1.BoardsModule, typeorm_1.TypeOrmModule.forRoot(typeorm_config_1.typeORMConfig), auth_module_1.AuthModule],
     })
 ], AppModule);
 //# sourceMappingURL=app.module.js.map

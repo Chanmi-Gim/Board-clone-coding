@@ -1,5 +1,6 @@
 import { BadRequestException, PipeTransform } from '@nestjs/common';
-import { BoardStatus } from '../board.model';
+import { BoardStatus } from '../board.status.enum';
+// import { BoardStatus } from '../board.model';
 
 export class BoardStatusValidationPipe implements PipeTransform {
   readonly StatusOptions = [BoardStatus.PRIVATE, BoardStatus.PUBLIC];

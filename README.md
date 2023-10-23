@@ -323,3 +323,308 @@
          return this.boardService.updateBoardStatus(id, status);
        }
      ```
+
+## Postgres & TypeORM 연동
+
+### 설치
+
+- [Postgres](https://postgresapp.com/downloads.html) SQL
+- [pgAdmin](https://www.pgadmin.org/download/) : 데이터베이스를 보는 Tool
+- 모듈
+
+  - @nestj/typeorm: nestjs에서 typeorm을 사용하기 위해 연동시켜주는 모듈
+
+  ```bash
+  npm install pg typeorm@0.2 @nestjs/typeorm --save
+  ```
+
+- TypeORM : node.js에서 실행되고 TypeScript로 작성된 객체 관계형 매퍼 라이브러리. MYSQL, PostgreSQL, MariaDB, SQLite, MS SQL Server, Oracle, SAP Hana 및 WebOSQL과 같은 여러 데이터베이스를 지원한다.
+- ORM : 객체와 관계형 DB의 데이터를 자동으로 변형 및 연결하는 작업. (OOP는 클래스를 사용하나 관계형 DB는 테이블 사용한다.)
+- 참고 : [공식문서](http://docs.nestjs.com/techniques/database)
+
+### TypeORM 애플리케이션에 연결하기
+
+1. app - configs - typeorm.config.ts 생성 및 작성
+   ```Typescript
+   import { TypeOrmModuleOptions } from '@nestjs/typeorm';
+   export const typeORMConfig: TypeOrmModuleOptions = {
+     type: 'postgres',
+     host: 'localhost',
+     port: 5432,
+     username: 'postgres',
+     password: 'postgres',
+     database: 'board-app',
+     entities: [__dirname + '/../**/*.entity.{js,ts}'],
+     synchronize: true,
+   };
+   ```
+2. app.module.ts - TypeOrmModule 추가
+   ```Typescript
+   @Module({
+     imports: [BoardsModule, TypeOrmModule.forRoot(typeORMConfig), AuthModule],
+   })
+   export class AppModule {}
+   ```
+
+### 게시물을 위한 Entity 생성
+
+- Entity : DB의 테이블과 직접적으로 매핑되는 클래스
+  @Entity('users'): User 클래스가 users라는 이름의 데이터베이스 테이블과 매핑된다는 것을 나타냅니다.
+  @PrimaryGeneratedColumn(): id 속성이 테이블의 기본 키(primary key)로서 자동 생성되는 열임을 나타냅니다.
+  @Column(...): username과 password 속성이 데이터베이스의 열(columns)임을 나타냅니다. 데코레이터 내의 옵션을 통해 해당 열의 데이터 유형과 다른 제약 조건을 정의할 수 있습니다.
+
+- @Entity() : Board 클래스가 인자가 가진 이름의 데이터베이스 테이블과 매핑된다는 것을 나타냅니다.(===CREATE TABLE board). 만약 @Entity() 데코레이터를 아무런 인자 없이 사용한다면, TypeORM은 기본적으로 해당 엔터티의 클래스 이름을 테이블 이름으로 사용한다.
+- @PrimaryGeneratedColumn() : id 속성이 테이블의 기본키로서 자동 생성되는 열임을 나타냄
+- @Column() : 열 (옵션을 통해 데이터 유형과 다른 제약조건 정의 가능)
+- Entity 생성 (boards - board.entity.ts)
+
+  ```typescript
+  import { BaseEntity, Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+  import { BoardStatus } from './board.model';
+
+  @Entity()
+  export class Board extends BaseEntity {
+    @PrimaryGeneratedColumn()
+    id: number;
+
+    @Column()
+    title: string;
+
+    @Column()
+    description: string;
+
+    @Column()
+    status: BoardStatus;
+  }
+  ```
+
+### Repository
+
+- Entity 개체와 함께 작동하며 Entity 찾기, 삽입, 업데이트, 삭제 등을 처리한다.
+- Repository Pattern : 데이터베이스에 관련된 일은 서비스에서 하는게 아닌 Repository에서 하는 패턴
+  ![Alt text](image.png)
+- EntityRepository() : 클래스를 사용자 정의 저장소로 선언하는데 사용된다. 사용자 지정 저장소는 일부 특정 엔터티를 관리하거나 일반 저장소일 수 있다.
+- Repository 생성하기
+
+  1. 파일 생성 후 클래스 생성(board.repository.ts)
+
+     ```typescript
+     import { EntityRepository, Repository } from 'typeorm';
+     import { Board } from './board.entity';
+
+     @EntityRepository(Board)
+     export class BoardRepository extends Repository<Board> {}
+     ```
+
+  2. 생성한 repository를 다른 곳에서도 사용할 수 있기 위해서 board.module에서 import
+
+     ```typescript
+     @Module({
+       imports: [TypeOrmModule.forFeature([BoardRepository])],
+       controllers: [BoardsController],
+       providers: [BoardsService],
+     })
+     export class BoardsModule {}
+     ```
+
+  ❗️ 에러 해결
+
+  - 강의에서는 Board.module.ts에 BoardRepository import하나, Board로 수정
+  - boards.service.ts에서 @InjectRepository(BoardRepository)의 인자를 Board로 수정
+
+## DB를 이용한 CRUD 구현
+
+### DB를 위한 소스코드 정리 : 이전 local에 저장하면서 생겨났던 소스코드 정리
+
+- service
+- controller
+- Board.model.ts은 삭제하고 enum BoardStatus만 살려서 Board.status.enum.ts 새로 생성
+- 불필요한 경로 지우기
+  - board-status-validation.pipe.ts
+  - boards.controller.ts
+  - board.entity.ts
+  - uuid
+
+### 참고
+
+- findOne() : findOne()는 주어진 조건에 일치하는 첫 번째 레코드를 데이터베이스에서 찾아 반환한다. 만약 일치하는 레코드가 없으면 undefined를 반환한다.
+- async await을 이용해서 DB 작업이 끝난 후 결과값을 받을 수 있도록 해준다.
+- typeORM을 쓸 때는 Repository pattern을 사용하기에 service에 repository를 inject한다.
+
+### ID를 이용해서 특정 게시물 가져오기
+
+- service
+
+  - findOne({where : {요소}})로 넣어줘야 한다.
+
+  ```typescript
+  @Injectable()
+  export class BoardsService {
+    constructor(
+      @InjectRepository(BoardRepository)
+      private boardRepository: BoardRepository,
+    ) {}
+  }
+  ```
+
+  ```typescript
+  async getBoardById(id: number): Promise<Board> {
+    const found = await this.boardRepository.findOne({ where: { id } });
+    if (!found) {
+      throw new NotFoundException(`Can't find Board with id ${id}`);
+    }
+    return found;
+  }
+  ```
+
+- module
+
+  ```typescript
+  @Module({
+    imports: [TypeOrmModule.forFeature([BoardRepository])],
+    controllers: [BoardsController],
+    providers: [BoardsService, BoardRepository],
+  })
+  ```
+
+- controller
+
+  ```typescript
+  @Get('/:id')
+  getBoardById(@Param('id') id: number): Promise<Board> {
+    return this.boardService.getBoardById(id);
+  }
+  ```
+
+### 게시물 생성하기
+
+- service
+
+  ```typescript
+  createBoard(createBoardDto: CreateBoardDto): Promise<Board> {
+    return this.boardRepository.createBoard(createBoardDto);
+  }
+  ```
+
+- repository
+
+  ```typescript
+  @EntityRepository(Board)
+  export class BoardRepository extends Repository<Board> {
+    constructor(private readonly dataSource: DataSource) {
+      super(Board, dataSource.createEntityManager());
+    }
+
+    async createBoard(createBoardDto: CreateBoardDto): Promise<Board> {
+      const { title, description } = createBoardDto;
+      const board = new Board();
+      board.title = title;
+      board.description = description;
+      board.status = BoardStatus.PUBLIC;
+      await board.save();
+      return board;
+    }
+  }
+  ```
+
+- controller
+
+  ```typescript
+  @Post()
+  @UsePipes(ValidationPipe)
+  createBoard(@Body() createBoardDto: CreateBoardDto): Promise<Board> {
+    return this.boardService.createBoard(createBoardDto);
+  }
+  ```
+
+### 게시물 삭제하기
+
+- 데이터베이스 레코드 삭제하는 방식 2가지
+
+  - remove : Entity 인스턴스를 전달받아 해당 Entity를 삭제. 무조건 존재하는 아이템을 지워야 한다. 그렇지 않으면 404 error 발생 (DB 2번 접근 : 아이템 유무 확인 + 있으면 지우기)
+  - delete : 삭제할 조건을 직접 전달받아 해당 조건에 맞는 레코드 삭제. 만약 아이템이 존재하면 지우고 존재하지 않으면 아무런 영향이 없음 (DB 1번 접근 : 있으면 지우기 / 단순 삭제 작업에 빠르고 효율적 )
+
+- ParseIntPipe : ParseIntPipe는 문자열을 정수로 변환하는 데 사용되며, 변환이 불가능할 경우 예외를 발생시킨다.
+
+- service
+
+  ```typescript
+    async deleteBoard(id: number): Promise<void> {
+    const result = await this.boardRepository.delete(id);
+    if (result.affected === 0) {
+      throw new NotFoundException(`Can't find Board with id ${id}`);
+    }
+    console.log('result', result);
+  }
+  ```
+
+- constroller
+  ```typescript
+  @Delete('/:id')
+  deleteBoard(@Param('id', ParseIntPipe) id): Promise<void> {
+    return this.boardService.deleteBoard(id);
+  }
+  ```
+
+### 게시물 상태 업데이트하기
+
+- service
+
+  ```typescript
+    async updateBoardStatus(id: number, status: BoardStatus): Promise<Board> {
+    const board = await this.getBoardById(id);
+    board.status = status;
+    await this.boardRepository.save(board);
+    return board;
+  ```
+
+- controller
+  ```typescript
+    @Patch('/:id/status')
+    updateBoardStatus(
+      @Param('id', ParseIntPipe) id: number,
+      @Body('status', BoardStatusValidationPipe) status: BoardStatus,
+    ) {
+      return this.boardService.updateBoardStatus(id, status);
+    }
+  ```
+
+### 모든 게시물 가져오기
+
+- service
+
+  ```typescript
+  async getAllBoards(): Promise<Board[]> {
+    console.log(this.boardRepository);
+    return this.boardRepository.find();
+  }
+  ```
+
+- controller
+  ```typescript
+  @Get()
+  getAllBoard(): Promise<Board[]> {
+    return this.boardService.getAllBoards();
+  }
+  ```
+
+## 인증 기능 구현
+
+- auth의 module, controller, service 생성
+
+```bash
+nest g module auth
+nest g controller auth --no-spec
+nest g service auth --no-spec
+```
+
+- entity 생성
+
+  - 유저에 대한 인증을 하는 것이니 유저가 필요. 유저 데이터를 위한 유저 Entity를 생성
+
+    1. user.entity.ts 파일 생성
+    2. 파일 소스 코드 작성
+
+```
+
+```
