@@ -1,10 +1,20 @@
-// export class User extends BaseEntity {
-//   @PrimaryGeneratedColumn()
-//   id: number;
+import {
+  BaseEntity,
+  Column,
+  Entity,
+  PrimaryGeneratedColumn,
+  Unique,
+} from 'typeorm';
 
-//   @Column()
-//   username: string;
+@Entity()
+@Unique(['username'])
+export class User extends BaseEntity {
+  @PrimaryGeneratedColumn()
+  id: number;
 
-//   @Column()
-//   password: string;
-// }
+  @Column()
+  username: string;
+
+  @Column()
+  password: string;
+}

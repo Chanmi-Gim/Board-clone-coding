@@ -27,7 +27,7 @@ import { BoardStatus } from './board.status.enum';
 //   ValidationPipe,
 // } from '@nestjs/common';
 // import { Board, BoardStatus } from './board.model';
-// import { CreateBoardDto } from './dto/create-board.dto';
+// import { CreateBoardDto } fvrom './dto/create-board.dto';
 // import { BoardStatusValidationPipe } from './pipes/board-status-validation.pipe';
 
 @Controller('boards')

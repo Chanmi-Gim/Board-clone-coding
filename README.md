@@ -221,15 +221,15 @@
 
   1. handler-level pipes : 핸들러 레벨의 파이프.
 
-  - @UsePipes() 데코레이터 이용. (모든 파라미터에 적용됨)
+  - **@UsePipes()** 데코레이터 사용하면 해당 핸들러의 파라미터 값들에 대한 검증 수행가능. 주로 **DTO 클래스** 와 함께 사용되며 각 필드에는 데코레이터를 사용하여 규칙 및 제약조건 지정할 수 있다. (@IsNotEmpty(), @IsString(), @IsDate()...)
 
   2. parameter-level pipes : 파라미터 레벨의 파이프.
 
-  - @Body('title', 파이프)
+  - @Body('title', **파이프**)
 
   3. global-level pipes : 애플리케이션 레벨의 파이프. 클라이언트에서 들어오는 모든 요청에 적용됨.
 
-  - main.ts에 넣어준다.
+  - main.ts에 넣어준다. app.useGlobalPipes(**파이프**)
 
 - built-in Pipe 종류
 
@@ -246,7 +246,7 @@
   npm install class-validator class-transformer --save
   ```
 
-- 실습 1. Post시 빈 문자열 보냈을 경우 에러 발생
+- alidation 실습 1. Post시 빈 문자열 보냈을 경우 에러 발생
 
   1. dto에서 pipe 적용 (class-validator)
 
@@ -273,7 +273,7 @@
 
   3. postman으로 빈 문자열을 보냈을 경우 에러발생
 
-- 실습 2. Get시 해당되는 데이터가 없을 경우 에러발생
+- Validation 실습 2. Get시 해당되는 데이터가 없을 경우 에러발생
 
   - new NotFoundException() 이용 -> not found 에러 발생
     ```typescript
@@ -335,7 +335,7 @@
   - @nestj/typeorm: nestjs에서 typeorm을 사용하기 위해 연동시켜주는 모듈
 
   ```bash
-  npm install pg typeorm@0.2 @nestjs/typeorm --save
+  npm install pg typeorm @nestjs/typeorm --save
   ```
 
 - TypeORM : node.js에서 실행되고 TypeScript로 작성된 객체 관계형 매퍼 라이브러리. MYSQL, PostgreSQL, MariaDB, SQLite, MS SQL Server, Oracle, SAP Hana 및 WebOSQL과 같은 여러 데이터베이스를 지원한다.
@@ -386,6 +386,7 @@
   export class Board extends BaseEntity {
     @PrimaryGeneratedColumn()
     id: number;
+    21;
 
     @Column()
     title: string;
@@ -426,11 +427,6 @@
      })
      export class BoardsModule {}
      ```
-
-  ❗️ 에러 해결
-
-  - 강의에서는 Board.module.ts에 BoardRepository import하나, Board로 수정
-  - boards.service.ts에서 @InjectRepository(BoardRepository)의 인자를 Board로 수정
 
 ## DB를 이용한 CRUD 구현
 
@@ -608,23 +604,214 @@
   }
   ```
 
-## 인증 기능 구현
+## 인증 기능 구현 Setting
 
-- auth의 module, controller, service 생성
+- auth - module, controller, service 생성
 
-```bash
-nest g module auth
-nest g controller auth --no-spec
-nest g service auth --no-spec
-```
+  ```bash
+  nest g module auth
+  nest g controller auth --no-spec
+  nest g service auth --no-spec
+  ```
 
-- entity 생성
+* User entity 생성
 
-  - 유저에 대한 인증을 하는 것이니 유저가 필요. 유저 데이터를 위한 유저 Entity를 생성
+1. user.entity.ts
 
-    1. user.entity.ts 파일 생성
-    2. 파일 소스 코드 작성
+   ```typescript
+   import { BaseEntity, Column, PrimaryGeneratedColumn } from 'typeorm';
 
-```
+   export class User extends BaseEntity {
+     @PrimaryGeneratedColumn()
+     id: number;
 
-```
+     @Column()
+     username: string;
+
+     @Column()
+     password: string;
+   }
+   ```
+
+2. user.repository.ts
+
+   ```typescript
+   import { EntityRepository, Repository } from 'typeorm';
+   import { User } from './user.entity';
+   @EntityRepository(User)
+   export class UserRepository extends Repository<User> {}
+   ```
+
+3. auth.module.ts
+
+   Entity는 애플리케이션 전반에 걸쳐 사용될 수 있으므로 특정 모듈에 종속적이지 않으나 Repository는 특정 모듈에서 주입받아 사용될 수 있도록 해당 모듈에 등록되어야 한다.
+
+   ```typescript
+   @Module({
+     imports: [TypeOrmModule.forFeature([UserRepository])],
+     controllers: [AuthController],
+     providers: [AuthService, UserRepository],
+   })
+   export class AuthModule {}
+   ```
+
+## 회원가입 기능 구현
+
+- dto (src- auth - dto- auth-credential.dto)
+
+  ```typescript
+  import { IsNotEmpty } from 'class-validator';
+  export class AuthCredentialsDto {
+    username: string;
+    password: string;
+  }
+  ```
+
+- repository
+
+  ```typescript
+  @EntityRepository(User)
+  export class UserRepository extends Repository<User> {
+    constructor(private readonly dataSource: DataSource) {
+      super(User, dataSource.createEntityManager());
+    }
+
+    async createUser(authCredentialsDto: AuthCredentialsDto): Promise<void> {
+      const { username, password } = authCredentialsDto;
+      const user = this.create({ username, password });
+      await this.save(user);
+    }
+  }
+  ```
+
+- service
+
+  ```typescript
+  @Injectable()
+  export class AuthService {
+    constructor(
+      @InjectRepository(UserRepository)
+      private userRepository: UserRepository,
+    ) {}
+
+    signUp(authCredentialsDto: AuthCredentialsDto): Promise<void> {
+      return this.userRepository.createUser(authCredentialsDto);
+    }
+  }
+  ```
+
+- controller
+
+  ```typescript
+  @Controller('auth')
+  export class AuthController {
+    constructor(private authService: AuthService) {}
+
+    @Post('/signup')
+    @UsePipes(ValidationPipe)
+    signUp(@Body() authCredentialsDto: AuthCredentialsDto): Promise<void> {
+      return this.authService.signUp(authCredentialsDto);
+    }
+  }
+  ```
+
+## 유저 데이터 유효성 체크
+
+1. 원하는 이름의 길이, 비밀번호의 길이와 같은 유효성을 체크할 수 있도록 조건 넣기
+
+- Dto 파일에서 Request로 들어오는 값을 정의해주고 있기 때문에 Dto 파일에 값들 하나하나에 Class-validator 모듈을 이용해서 유효성 조건을 넣어준다.
+
+- dto : 유효성 조건 삽입하여 유효성 체크
+
+  ```typescript
+  export class AuthCredentialsDto {
+    @MinLength(4)
+    @MaxLength(20)
+    @IsString()
+    username: string;
+
+    @MinLength(4)
+    @MaxLength(20)
+    @IsString()
+    @Matches(/^[a-zA-Z0-9]*$/, { message: '알파벳과 숫자만 입력가능합니다.' })
+    password: string;
+  }
+  ```
+
+- controller : 컨트롤러 파라미터 레벨 유효성 체크
+
+  ```typescript
+    @Post('/signup')
+    signUp(
+      @Body(ValidationPipe) authCredentialsDto: AuthCredentialsDto,
+    ): Promise<void> {
+      return this.authService.signUp(authCredentialsDto);
+    }
+  ```
+
+2. 유저 이름에 유니크한 값 주기
+
+- 2가지 방법이 존재한다. 첫번째는 repo에서 findOne을 통해 같은 유저가 있는지 확인하고 없으면 데이터를 저장하는 방법이고, 두번째는 데이터베이스 레벨에서 만약 같은 이름을 가진 유저가 있다면 에러를 던져주는 방법이다. 첫번째 방법은 데이터베이스 처리를 2번 해줘야 하기 때문에 여기에서는 두번째 방법을 사용한다.
+
+- entity ( @Unique([원하는 유니크 속성]))
+
+  ```typescript
+  @Entity()
+  @Unique(['username'])
+  export class User extends BaseEntity {
+    @PrimaryGeneratedColumn()
+    id: number;
+
+    @Column()
+    username: string;
+
+    @Column()
+    password: string;
+  }
+  ```
+
+- 동일한 유저가 존재한 경우 에러 표시
+
+  - Controller 레벨에서 500 에러를 던져 버리기 때문에 repo에서 try catch 구문으로 repo에서 에러 해결
+  - 아래의 error를 찍어보면 에러 이유, 에러 코드 등을 확인할 수 있다.
+
+  ```typescript
+    async createUser(authCredentialsDto: AuthCredentialsDto): Promise<void> {
+      const { username, password } = authCredentialsDto;
+      const user = this.create({ username, password });
+      try {
+        await this.save(user);
+      } catch (error) {
+        if (error.code === '23505') {
+          throw new ConflictException('이름이 이미 존재합니다.');
+        } else {
+          throw new InternalServerErrorException();
+        }
+      }
+    }
+
+  ```
+
+## 비밀번호 암호화하기
+
+- 암호화 방법
+  1. 원본 비밀번호 저장 : 최악
+  2. 비밀번호를 암호화 키와 함께 암호화 (양방향) : 암호화키 노출되면 위험도 높음
+  3. SHA256 등으로 hash해서 저장 (단방향) : 복호화 불가, 레인보우 테이블로 위험도 높음
+  - 레인보우 테이블 : 암호화 해시 함수에서 사용될 수 있는 가능한 모든 평문 문자열과 해당 문자열의 해시 값을 사전에 계산하여 저장해 둔 테이블
+  4. salt + 비밀번호를 hash해서 저장 : bryptjs을 이용
+- bcryptjs : 암호화
+  ```bash
+  npm install bcryptjs --save
+  // import * as bcrypt from 'bcryptjs'
+  ```
+  - repository
+  ```typescript
+    async createUser(authCredentialsDto: AuthCredentialsDto): Promise<void> {
+    const { username, password } = authCredentialsDto;
+    const salt = await bcrypt.genSalt();
+    const hashedPassword = await bcrypt.hash(password, salt);
+    const user = this.create({ username, password: hashedPassword });
+    ...
+    }
+  ```
