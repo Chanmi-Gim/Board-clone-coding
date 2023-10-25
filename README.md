@@ -815,3 +815,453 @@
     ...
     }
   ```
+
+## 로그인 기능 구현하기
+
+- service
+  저장된 해시 값에서 솔트를 추출한다. 추출된 솔트를 사용하여 제공된 평문 비밀번호를 다시 해시하고 두 해시 값을 비교한다. 따라서, 별도로 솔트를 저장하지 않아도 해시와 비교 과정에서 자동으로 솔트를 사용할 수 있다.
+
+  ```typescript
+    async signIn(authCredentialsDto: AuthCredentialsDto): Promise<string> {
+      const { username, password } = authCredentialsDto;
+      const user = await this.userRepository.findOne({ where: { username } });
+      if (user && (await bcrypt.compare(password, user.password))) {
+        return 'logIn success';
+      } else {
+        throw new UnauthorizedException('logIn failed');
+      }
+    }
+  ```
+
+- controller
+
+  ```typescript
+    @Post('/signin')
+    signIn(@Body(ValidationPipe) authCredentialsDto: AuthCredentialsDto) {
+      return this.authService.signIn(authCredentialsDto);
+    }
+
+  ```
+
+## JWT (JSON Web Token)
+
+- JWT : 정보를 안전하게 전달하기 위한 작은 크기의 토큰으로 인증 및 정보교환에 사용된다.
+- Passport : JWT를 이용해서 인증 처리를 쉽게 만들어주는 모듈
+  ```bash
+  npm install @nestjs/jwt @nestjs/passport passport passport-jwt --save
+  ```
+
+### JWT/Passport 모듈 등록하기
+
+- auth.module
+
+  - secret : secret text
+  - expiresIn : 토큰 유효기간 (3600초 === 1시간)
+
+  ```typescript
+  @Module({
+    imports: [
+      PassportModule.register({ defaultStrategy: 'jwt' }),
+      JwtModule.register({
+        secret: 'Secret1234',
+        signOptions: {
+          expiresIn: 3600,
+        },
+      }),
+      TypeOrmModule.forFeature([UserRepository]),
+    ],
+    controllers: [AuthController],
+    providers: [AuthService, UserRepository],
+  })
+  export class AuthModule {}
+  ```
+
+### 로그인 성공시 JWT를 이용해서 토큰 생성해주기
+
+- service
+  - 생성자에 jwtService 추가
+    ```typescript
+        private jwtService: JwtService,
+    ```
+  - jwtService.sign(payload) : sign 메서드는 내부적으로 header, payload, secret text(환경설정에서 정의된)를 사용하여 JWT 생성한다. (내부적으로 복잡한 과정을 단순화)
+    ```typescript
+      async signIn(
+        authCredentialsDto: AuthCredentialsDto,
+      ): Promise<{ accessToken: string }> {
+        const { username, password } = authCredentialsDto;
+        const user = await this.userRepository.findOne({ where: { username } });
+        if (user && (await bcrypt.compare(password, user.password))) {
+          const payload = { username };
+          const accessToken = await this.jwtService.sign(payload);
+          return { accessToken };
+        } else {
+          throw new UnauthorizedException('logIn failed');
+        }
+      }
+    ```
+  - controller : 반환타입 추가
+    ```typescript
+      @Post('/signin')
+      signIn(
+        @Body(ValidationPipe) authCredentialsDto: AuthCredentialsDto,
+      ): Promise<{ accessToken: string }> {
+        return this.authService.signIn(authCredentialsDto);
+      }
+    ```
+
+### Passport, JWT 이용해서 토큰 인증 후 유저 정보 가져오기
+
+- Passport 역할
+  JWT 토큰을 받은 유저가 JWT 토큰을 포함한 HTTP 헤더와 유저 이름을 넣은 payload를 넣어서 서버에 요청을 보낸다. 서버에서는 JWT 토큰이 유효한 지 secret text를 이용해서 확인한 후 동일하면, payload 내 유저이름을 이용해서 Database 안에 있는 유저 이름에 해당하는 유저 정보를 모두 가져올 수 있다. 이러한 처리를 쉽게 해주는 모듈이다.
+
+  ```bash
+  npm install @types/passport-jwt --save
+  ```
+
+- jwt.strategy.ts 파일 생성
+
+  ```typescript
+  // jwt.strategy를 다른곳에서도 사용할 수 있도록 @Injectable()
+  @Injectable()
+  export class JwtStrategy extends PassportStrategy(Strategy) {
+    constructor(
+      @InjectRepository(UserRepository)
+      private userRepository: UserRepository,
+    ) {
+      super({
+        secretOrKey: 'Secret1234', // 토큰 유효성 체크할 때 쓰는 secret text
+        jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(), // auth header에서 토큰타입이 bearerToken인 토큰을 추출했다.
+      });
+    }
+
+    // 위에서 토큰이 유효한지 체크되면 validate 메소드에서 payload에 있는 유저이름이 데이터베이스에서 있는 유저인지 확인후 있다면 유저객체를 return 해준다.
+    // return 값은 @UseGuards(AuthGuard())를 이용한 모든 요청의 Request Object에 들어간다.
+    async validate(payload) {
+      const { username } = payload;
+      const user: User = await this.userRepository.findOne({
+        where: { username },
+      });
+      if (!user) {
+        throw new UnauthorizedException();
+      }
+      return user;
+    }
+  }
+  ```
+
+- auth.module에 추가
+
+  ```typescript
+  @Module({
+    imports: [
+      PassportModule.register({ defaultStrategy: 'jwt' }), // 유저를 인증하기 위해 사용할 기본 strategy 명시
+      JwtModule.register({
+        // jwt 인증 부분을 담당. 주로 sign()을 위한 부분이다.
+        secret: 'Secret1234', // 토큰 생성시 사용하는 secret text
+        signOptions: {
+          expiresIn: 3600,
+        },
+      }),
+      TypeOrmModule.forFeature([UserRepository]),
+    ],
+    controllers: [AuthController],
+    providers: [AuthService, UserRepository, JwtStrategy], // Auth 모듈에서 사용할 수 있도록 등록
+    exports: [JwtStrategy, PassportModule], // 다른 모듈에서 사용할 수 있도록 등록
+  })
+  ```
+
+- controller
+
+  - @UseGuards : Guard 미들웨어를 처리해주는 데코데이터,
+  - AuthGuard() : @nestjs/passport에서 가져온 메소드. JWT 토큰을 해석하고 이를 기반으로 사용자를 인증하는 역할. (토큰이 있다면 유저객체를, 토큰이 없거나, 잘못되면 Error!)
+
+    ```typescript
+    @Post('/authTest')
+    @UseGuards(AuthGuard()) //@UseGuards 안에 @nestjs/passport에서 가져온 AuthGuard()를 이용하면 요청안에 유저 정보를 넣어줄 수 있다.
+    authTest(@Req() req) {
+      console.log(req.user); //req.user: 유저객체
+    }
+    ```
+
+### 커스텀 데코레이터 생성하기
+
+- req.user가 아닌 바로 user를 가져올 수 있도록 하려면 커스텀 데코레이터를 사용하면 된다.
+
+- get-user.decorator.ts 생성
+
+  ```typescript
+  import { ExecutionContext, createParamDecorator } from '@nestjs/common';
+  import { User } from './user.entity';
+
+  export const GetUser = createParamDecorator(
+    (data, ctx: ExecutionContext): User => {
+      const req = ctx.switchToHttp().getRequest();
+      return req.user;
+    },
+  );
+  ```
+
+- controller
+  ```typescript
+    @Post('/authTest')
+    @UseGuards(AuthGuard())
+    test(@GetUser() user: User) {
+      console.log('user: ', user);
+    }
+  ```
+
+### 인증된 유저만 게시물 보고 쓸 수 있게 만들기
+
+- 유저에게 게시물 접근 권한 주기
+
+  - board에서 인증된 유저인지 확인하기 위해서는 우선 AuthModule import
+  - import하면 AuthModule에서 하는 어떠한 것이든 BoardModule에서 사용가능하다.
+
+    ```typescript
+    @Module({
+      imports: [TypeOrmModule.forFeature([BoardRepository]), AuthModule],
+      controllers: [BoardsController],
+      providers: [BoardsService, BoardRepository],
+    })
+    export class BoardsModule {}
+    ```
+
+  - board.controller.ts : 핸들러 레벨에서 모두 적용되도록 @UseGuards(AuthGuard()) 추가
+    ```typescript
+    @Controller('boards')
+    @UseGuards(AuthGuard())
+    ```
+  - 올바른 토큰을 주지 않으면 401 Unauthorized Error 발생한다.
+
+## 게시물에 접근하는 권한 처리
+
+### 유저의 게시물의 관계 형성 해주기
+
+유저와 게시물의 관계에 대해서는 설정해준게 없기 때문에 게시물을 생성할때도 어떤 유저가 생성해줬는지 정보를 같이 넣어줘야한다.
+
+1. 관계를 형성하기 위해서는 엔티티에 서로간의 필드를 넣어줘야 한다.
+   ![Alt text](image-1.png)
+   - @One to Many()
+   - @Many to One()
+
+- user.Entity
+
+  - type : Board 타입 정의
+  - board : Board에서 User로 접근하기 위해서 board.user로 접근
+  - eager : User정보를 가져올때 Board 정보도 같이 가져옴
+
+  ```typescript
+  @Entity()
+  @Unique(['username'])
+  export class User extends BaseEntity {
+    @PrimaryGeneratedColumn()
+    id: number;
+
+    @Column()
+    username: string;
+
+    @Column()
+    password: string;
+
+    @OneToMany((type) => Board, (board) => board.user, { eager: true })
+    boards: Board[];
+  }
+  ```
+
+- board.Entity
+
+  - type : User 타입 정의
+  - user : User에서 Board로 접근하기 위해서 user.board로 접근
+  - eager : Board정보를 가져올때 User정보고 같이 가져옴
+
+  ```typescript
+  @Entity()
+  export class Board extends BaseEntity {
+    @PrimaryGeneratedColumn()
+    id: number;
+
+    @Column()
+    title: string;
+
+    @Column()
+    description: string;
+
+    @Column()
+    status: BoardStatus;
+
+    @ManyToOne((type) => User, (user) => user.boards, { eager: false })
+    user: User;
+  }
+  ```
+
+### 게시물을 생성할때 유저 정보 넣어주기
+
+유저와 게시물의 관계를 엔티티를 이용해서 형성해주었으므로 실제로 게시물을 생성할때 유저 정보를 게시물에 넣어줘야 한다.
+
+```
+게시물 생성 요청 ➡️ 헤더안에 있는 토큰으로 유저정보 ➡️ 유저정보와 게시물 관계 형성하며 게시물 생성
+```
+
+- board.controller
+
+  ```typescript
+  @Post()
+  @UsePipes(ValidationPipe)
+  createBoard(
+    @Body() createBoardDto: CreateBoardDto,
+    @GetUser() user: User,
+  ): Promise<Board> {
+    return this.boardService.createBoard(createBoardDto, user);
+  }
+  ```
+
+- board.service
+
+  ```typescript
+    createBoard(createBoardDto: CreateBoardDto, user: User): Promise<Board> {
+      return this.boardRepository.createBoard(createBoardDto, user);
+    }
+  ```
+
+- board.repository
+
+  ```typescript
+    async createBoard(
+      createBoardDto: CreateBoardDto,
+      user: User,
+    ): Promise<Board> {
+      const { title, description } = createBoardDto;
+      const board = this.create({
+        title,
+        description,
+        status: BoardStatus.PUBLIC,
+        user,
+      });
+      await board.save();
+      return board;
+    }
+
+  ```
+
+### 해당 유저의 게시물만 가져오기
+
+게시물을 가져올 때 해당 유저가 생성한 게시물만 가져오기
+
+- controller
+
+  ```typescript
+    @Get('/myboards')
+    getAllMyBoard(@GetUser() user: User): Promise<Board[]> {
+      return this.boardService.getAllMyBoards(user);
+    }
+  ```
+
+- service
+  ```typescript
+    async getAllMyBoards(user: User): Promise<Board[]> {
+      const query = this.boardRepository.createQueryBuilder('board');
+      query.where('board.userId = :userId', { userId: user.id });
+      const boards = await query.getMany();
+      return boards;
+    }
+  ```
+
+### 해당 유저가 id로 특정 게시물 가져오기
+
+특정 게시물의 id를 이용하여 해당 유저 게시물을 가져올건데, 해당 유저의 id를 따로 entity에 정의
+(사전 작업 : 이미 전에 작업한 데이터들이 남아 있을텐데 새로운 컬럼이 추가되었으므로 사전 데이터의 유저id는 null값이다. error가 발생하므로 사전에 board 테이블은 다시 만들어서 삭제해줄 것)
+
+- controller
+
+  ```typescript
+    @Get('/myboards/:id')
+    getMyBoardById(
+      @Param('id', ParseIntPipe) id: number,
+      @GetUser() user: User,
+    ): Promise<Board> {
+      return this.boardService.getMyBoardsById(id, user);
+    }
+  ```
+
+- service
+
+  ```typescript
+    async getMyBoardsById(id: number, user: User): Promise<Board> {
+      const found = await this.boardRepository.findOne({
+        where: { id, userId: user.id },
+      });
+      if (!found) {
+        throw new NotFoundException(`Can't find Board with id ${id}`);
+      }
+      return found;
+    }
+
+  ```
+
+### 해당 유저가 id로 자신이 생성한 특정 게시물을 삭제하기
+
+- service
+
+  ```typescript
+    async deleteMyBoard(id: number, user: User): Promise<void> {
+      const result = await this.boardRepository.delete({
+        id: id,
+        userId: user.id,
+      });
+      if (result.affected === 0) {
+        throw new NotFoundException(`Can't find Board with id ${id}`);
+      }
+      console.log('result', result);
+    }
+  ```
+
+- controller
+
+  ```typescript
+    //
+    @Delete('/myboards/:id')
+    deleteMyBoard(
+      @Param('id', ParseIntPipe) id: number,
+      @GetUser() user: User,
+    ): Promise<void> {
+      return this.boardService.deleteMyBoard(id, user);
+    }
+  ```
+
+### 해당 유저가 id로 자신이 생성한 특정 게시물을 수정하기
+
+- controller
+
+  ```typescript
+    @Patch('/:id/mystatus')
+    updateMyBoardStatus(
+      @Param('id', ParseIntPipe) id: number,
+      @Body('status', BoardStatusValidationPipe) status: BoardStatus,
+      @GetUser() user: User,
+    ) {
+      return this.boardService.updateMyBoardStatus(id, status, user);
+    }
+  ```
+
+- service
+
+  ```typescript
+    async updateMyBoardStatus(
+      id: number,
+      status: BoardStatus,
+      user: User,
+    ): Promise<Board> {
+      const board = await this.getMyBoardsById(id, user);
+      board.status = status;
+      await this.boardRepository.save(board);
+      return board;
+    }
+  ```
+
+## 로그 남기기
+
+## 설정 및 마무리
+
+### 설정
+
+### 설정 적용 & 강의 마무리

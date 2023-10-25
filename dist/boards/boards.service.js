@@ -20,12 +20,27 @@ let BoardsService = class BoardsService {
     constructor(boardRepository) {
         this.boardRepository = boardRepository;
     }
-    createBoard(createBoardDto) {
-        return this.boardRepository.createBoard(createBoardDto);
+    createBoard(createBoardDto, user) {
+        return this.boardRepository.createBoard(createBoardDto, user);
     }
     async getAllBoards() {
         console.log(this.boardRepository);
         return this.boardRepository.find();
+    }
+    async getAllMyBoards(user) {
+        const query = this.boardRepository.createQueryBuilder('board');
+        query.where('board.userId = :userId', { userId: user.id });
+        const boards = await query.getMany();
+        return boards;
+    }
+    async getMyBoardsById(id, user) {
+        const found = await this.boardRepository.findOne({
+            where: { id, userId: user.id },
+        });
+        if (!found) {
+            throw new common_1.NotFoundException(`Can't find Board with id ${id}`);
+        }
+        return found;
     }
     async getBoardById(id) {
         const found = await this.boardRepository.findOne({ where: { id } });
@@ -41,8 +56,24 @@ let BoardsService = class BoardsService {
         }
         console.log('result', result);
     }
+    async deleteMyBoard(id, user) {
+        const result = await this.boardRepository.delete({
+            id: id,
+            userId: user.id,
+        });
+        if (result.affected === 0) {
+            throw new common_1.NotFoundException(`Can't find Board with id ${id}`);
+        }
+        console.log('result', result);
+    }
     async updateBoardStatus(id, status) {
         const board = await this.getBoardById(id);
+        board.status = status;
+        await this.boardRepository.save(board);
+        return board;
+    }
+    async updateMyBoardStatus(id, status, user) {
+        const board = await this.getMyBoardsById(id, user);
         board.status = status;
         await this.boardRepository.save(board);
         return board;
