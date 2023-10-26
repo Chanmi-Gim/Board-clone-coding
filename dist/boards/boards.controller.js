@@ -24,18 +24,21 @@ const get_user_decorator_1 = require("../auth/get-user.decorator");
 let BoardsController = class BoardsController {
     constructor(boardService) {
         this.boardService = boardService;
+        this.logger = new common_1.Logger('Boards');
     }
     createBoard(createBoardDto, user) {
+        this.logger.verbose(`User ${user.username} creating a new board. Payload: ${JSON.stringify(createBoardDto)}`);
         return this.boardService.createBoard(createBoardDto, user);
+    }
+    getAllMyBoard(user) {
+        this.logger.verbose(`User ${user.username} trying to get all boards`);
+        return this.boardService.getAllMyBoards(user);
     }
     getAllBoard() {
         return this.boardService.getAllBoards();
     }
     getBoardById(id) {
         return this.boardService.getBoardById(id);
-    }
-    getAllMyBoard(user) {
-        return this.boardService.getAllMyBoards(user);
     }
     getMyBoardById(id, user) {
         return this.boardService.getMyBoardsById(id, user);
@@ -65,6 +68,13 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], BoardsController.prototype, "createBoard", null);
 __decorate([
+    (0, common_1.Get)('/mylist'),
+    __param(0, (0, get_user_decorator_1.GetUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [user_entity_1.User]),
+    __metadata("design:returntype", Promise)
+], BoardsController.prototype, "getAllMyBoard", null);
+__decorate([
     (0, common_1.Get)(),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
@@ -77,13 +87,6 @@ __decorate([
     __metadata("design:paramtypes", [Number]),
     __metadata("design:returntype", Promise)
 ], BoardsController.prototype, "getBoardById", null);
-__decorate([
-    (0, common_1.Get)('/myboards'),
-    __param(0, (0, get_user_decorator_1.GetUser)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [user_entity_1.User]),
-    __metadata("design:returntype", Promise)
-], BoardsController.prototype, "getAllMyBoard", null);
 __decorate([
     (0, common_1.Get)('/myboards/:id'),
     __param(0, (0, common_1.Param)('id', common_1.ParseIntPipe)),

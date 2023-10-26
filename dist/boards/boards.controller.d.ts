@@ -5,11 +5,12 @@ import { BoardStatus } from './board.status.enum';
 import { User } from 'src/auth/user.entity';
 export declare class BoardsController {
     private boardService;
+    private logger;
     constructor(boardService: BoardsService);
     createBoard(createBoardDto: CreateBoardDto, user: User): Promise<Board>;
+    getAllMyBoard(user: User): Promise<Board[]>;
     getAllBoard(): Promise<Board[]>;
     getBoardById(id: number): Promise<Board>;
-    getAllMyBoard(user: User): Promise<Board[]>;
     getMyBoardById(id: number, user: User): Promise<Board>;
     deleteBoard(id: any): Promise<void>;
     deleteMyBoard(id: number, user: User): Promise<void>;

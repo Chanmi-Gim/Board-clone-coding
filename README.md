@@ -1260,8 +1260,192 @@
 
 ## 로그 남기기
 
-## 설정 및 마무리
+- 로그의 종류
+
+  - Log : 중요한 정보의 범용 로깅
+  - Warning : 치명적이거나 파괴적이지 않은 처리되지 않은 문제
+  - Error : 치명적이거나 파괴적인 처리되지 않은 문제
+  - Debug : 오류 발생시 로직을 디버그하는데 도움이 되는 유용한 정보 ( 개발자용 )
+  - Verbose : 응용 프로그램의 동작에 대한 통찰력을 제공하는 정보( 운영자용 )
+
+- 로그 레벨 : 원하는 대로 환경에 따라서 로그의 레벨을 정의해서 넣어줄 수 있다.
+  ![Alt text](image-2.png)
+
+- 기능 하나 만들어질 때마다 로그 하나 만들기
+
+  - 앱 실행시 로거 추가
+
+    ```typescript
+    async function bootstrap() {
+      const app = await NestFactory.create(AppModule);
+      const port = 3000;
+      Logger.log(`Application running on port ${port}`);
+      await app.listen(3000);
+    }
+    ```
+
+  - createBoard, getAllMyBoard에 로거 추가
+
+    ```typescript
+      private logger = new Logger('Boards');
+    ```
+
+    ```typescript
+      @Post()
+      @UsePipes(ValidationPipe)
+      createBoard(
+        @Body() createBoardDto: CreateBoardDto,
+        @GetUser() user: User,
+      ): Promise<Board> {
+        this.logger.verbose(
+          `User ${user.username} creating a new board. Payload: ${JSON.stringify(
+            createBoardDto,
+          )}`,
+        );
+        return this.boardService.createBoard(createBoardDto, user);
+      }
+      @Get('/mylist')
+      getAllMyBoard(@GetUser() user: User): Promise<Board[]> {
+        this.logger.verbose(`User ${user.username} trying to get all boards`);
+        return this.boardService.getAllMyBoards(user);
+      }
+    ```
 
 ### 설정
 
-### 설정 적용 & 강의 마무리
+소스 코드안에서 어떠한 코드들은 개발환경이나 운영환경에 따라서 다르게 코드를 넣어줘야할 때가 있으며 남들에게 노출되지 않아야 하는 코드들도 있기에 설정 파일을 만들어서 따로 보관해줘야 한다.
+
+- 설정파일 : runtime 도중에 바뀌는 것이 아닌 애플리케이션이 시작할때 로드가 되어서 그 값을 정의해준다. XML, JSON, YAML, Environment Variables 같은 다양한 형식 이용 가능하다.
+
+  - Codebase : 일반적으로 port와 같이 노출되어도 상관없는 정보들
+  - 환경변수 : 비밀번호나 API Key같은 노출되면 안되는 정보들
+
+- 설정하기 위해 필요한 모듈
+
+  ```typescript
+  npm install config --save
+  ```
+
+- Config 모듈을 이용한 설정 파일 생성
+
+  - 루트 디렉토리에 config라는 폴더를 만든 후에 그 폴더 안에 JSON이나 YAML 형식의 파일을 생성합니다. config/default.yaml
+  - config 폴더 안에 파일생성
+
+    - default.yml : 기본 설정 (개발 환경 설정이나 운영 환경 설정에도 적용됨)
+    - development.yml : default.yml에서 설정한 것 + 개발 환경에서 필요한 정보
+    - production.yml: default.yml에서 설정한 것 + 운영 환경에서 필요한 정보
+
+      ```yml
+      // default.yml
+      server:
+        port:
+
+      db:
+        type:
+        port:
+        database: 'board-app'
+
+      jwt:
+        expriesIn:
+
+      // development.yml
+      db:
+        host:
+        username:
+        password:
+        synchronize: true
+
+      jwt:
+        secret:
+
+      // production.yml
+      db:
+        synchronize: false
+      ```
+
+  - 적용
+
+    - main.ts
+
+      ```typescript
+      import * as config from 'config'; // import
+
+      async function bootstrap() {
+        const app = await NestFactory.create(AppModule);
+        const serverConfig = config.get('server'); //
+        const port = serverConfig.port; //
+        Logger.log(`Application running on port ${port}`);
+        await app.listen(3000);
+      }
+      ```
+
+    - typeorm.config.ts
+
+      ```typescript
+      import { TypeOrmModuleOptions } from '@nestjs/typeorm';
+      import * as config from 'config';
+
+      const dbConfig = config.get('db');
+      export const typeORMConfig: TypeOrmModuleOptions = {
+        type: dbConfig.type,
+        host: process.env.RDS_HOSTNAME || dbConfig.host,
+        port: process.env.RDS_PORT || dbConfig.port,
+        username: process.env.RDS_USERNAME || dbConfig.username,
+        password: process.env.RDS_PASSWORD || dbConfig.password,
+        database: process.env.RDS_DATABASE || dbConfig.database,
+        entities: [__dirname + '/../**/*.entity.{js,ts}'],
+        synchronize: true,
+      };
+      ```
+
+    - auth.module.ts
+
+      ```typescript
+      import { Module } from '@nestjs/common';
+      import { AuthController } from './auth.controller';
+      import { AuthService } from './auth.service';
+      import { TypeOrmModule } from '@nestjs/typeorm';
+      import { UserRepository } from './user.repository';
+      import { JwtModule } from '@nestjs/jwt';
+      import { PassportModule } from '@nestjs/passport';
+      import { JwtStrategy } from './jwt.strategy';
+      import * as config from 'config';
+
+      const jwtConfig = config.get('jwt');
+      @Module({
+        imports: [
+          PassportModule.register({ defaultStrategy: 'jwt' }), // 유저를 인증하기 위해 사용할 기본 strategy 명시
+          JwtModule.register({
+            // jwt 인증 부분을 담당. 주로 sign()을 위한 부분이다.
+            secret: process.env.JWT_SECRET || jwtConfig.secret, // 토큰 생성시 사용하는 secret text
+            signOptions: {
+              expiresIn: jwtConfig.expiresIn,
+            },
+          }),
+          TypeOrmModule.forFeature([UserRepository]),
+        ],
+        controllers: [AuthController],
+        providers: [AuthService, UserRepository, JwtStrategy], // Auth 모듈에서 사용할 수 있도록 등록
+        exports: [JwtStrategy, PassportModule], // 다른 모듈에서 사용할 수 있도록 등록
+      })
+      export class AuthModule {}
+      ```
+
+    - jwt.strategy.ts
+
+      ```typescript
+        import * as config from 'config';
+
+        // jwt.strategy를 다른곳에서도 사용할 수 있도록 @Injectable()
+        @Injectable()
+        export class JwtStrategy extends PassportStrategy(Strategy) {
+          constructor(
+            @InjectRepository(UserRepository)
+            private userRepository: UserRepository,
+          ) {
+            super({
+              secretOrKey: process.env.JWT_SECRET || config.get('jwt.secret'), // 토큰 유효성 체크할 때 쓰는 secret text
+              jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(), // auth header에서 토큰타입이 bearerToken인 토큰을 추출했다.
+            });
+          }
+      ```

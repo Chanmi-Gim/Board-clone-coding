@@ -10,6 +10,7 @@ import {
   ValidationPipe,
   Patch,
   UseGuards,
+  Logger,
 } from '@nestjs/common';
 import { BoardsService } from './boards.service';
 import { Board } from './board.entity';
@@ -37,6 +38,7 @@ import { GetUser } from 'src/auth/get-user.decorator';
 @Controller('boards')
 @UseGuards(AuthGuard())
 export class BoardsController {
+  private logger = new Logger('Boards');
   constructor(private boardService: BoardsService) {}
 
   @Post()
@@ -45,9 +47,20 @@ export class BoardsController {
     @Body() createBoardDto: CreateBoardDto,
     @GetUser() user: User,
   ): Promise<Board> {
+    this.logger.verbose(
+      `User ${user.username} creating a new board. Payload: ${JSON.stringify(
+        createBoardDto,
+      )}`,
+    );
     return this.boardService.createBoard(createBoardDto, user);
   }
 
+  // 해당 유저의 게시물만 가져오기
+  @Get('/mylist')
+  getAllMyBoard(@GetUser() user: User): Promise<Board[]> {
+    this.logger.verbose(`User ${user.username} trying to get all boards`);
+    return this.boardService.getAllMyBoards(user);
+  }
   // 모든 게시물 가져오기
   @Get()
   getAllBoard(): Promise<Board[]> {
@@ -57,12 +70,6 @@ export class BoardsController {
   @Get('/:id')
   getBoardById(@Param('id') id: number): Promise<Board> {
     return this.boardService.getBoardById(id);
-  }
-
-  // 해당 유저의 게시물만 가져오기
-  @Get('/myboards')
-  getAllMyBoard(@GetUser() user: User): Promise<Board[]> {
-    return this.boardService.getAllMyBoards(user);
   }
 
   // 해당 유저가 id로 특정 게시물 가져오기

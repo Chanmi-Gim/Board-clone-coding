@@ -4,6 +4,7 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { UserRepository } from './user.repository';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { User } from './user.entity';
+import * as config from 'config';
 
 // jwt.strategy를 다른곳에서도 사용할 수 있도록 @Injectable()
 @Injectable()
@@ -13,7 +14,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private userRepository: UserRepository,
   ) {
     super({
-      secretOrKey: 'Secret1234', // 토큰 유효성 체크할 때 쓰는 secret text
+      secretOrKey: process.env.JWT_SECRET || config.get('jwt.secret'), // 토큰 유효성 체크할 때 쓰는 secret text
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(), // auth header에서 토큰타입이 bearerToken인 토큰을 추출했다.
     });
   }
